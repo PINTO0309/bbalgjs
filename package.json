@@ -42,7 +42,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/PINTO0309/bbalgjs.git"
+    "url": "git+https://github.com/PINTO0309/bbalgjs.git"
   },
   "bugs": {
     "url": "https://github.com/PINTO0309/bbalgjs/issues"
