@@ -1,0 +1,13 @@
+src/
+test/
+coverage/
+.babelrc
+.eslintrc.js
+.gitignore
+jest.config.js
+rollup.config.js
+*.log
+.DS_Store
+node_modules/
+.vscode/
+.idea/
