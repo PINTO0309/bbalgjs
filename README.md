@@ -41,16 +41,17 @@ const trackingResults = [false, false, true, true, true, true, true, true, true,
 trackingResults.forEach(detected => {
   longHistory.push(detected);
   shortHistory.push(detected);
+
+  // Always pass maxLength parameters (required)
+  const result = stateVerdict(
+    longHistory.toArray(), 
+    shortHistory.toArray(),
+    10,  // longMaxLength
+    3    // shortMaxLength
+  );
   
-  if (longHistory.length >= 2 && shortHistory.length >= 2) {
-    const result = stateVerdict(longHistory.toArray(), shortHistory.toArray());
-    
-    console.log({
-      stateInProgress: result.stateInProgress,
-      stateStartJudgment: result.stateStartJudgment,
-      stateEndJudgment: result.stateEndJudgment
-    });
-  }
+  // Returns all false until queues are full
+  console.log(result);
 });
 ```
 
@@ -68,9 +69,9 @@ import { stateVerdict, createFixedQueue } from 'bbalgjs';
 <script src="https://unpkg.com/bbalgjs/dist/bbalgjs.umd.min.js"></script>
 <script>
   const { stateVerdict, createFixedQueue } = bbalgjs;
-  
+
   // Use the functions
-  const result = stateVerdict([true, true, false, true], [true, true]);
+  const result = stateVerdict([true, true, false, true], [true, true], 4, 2);
   console.log(result);
 </script>
 ```
@@ -87,7 +88,9 @@ const shortQueue: FixedQueue<boolean> = createFixedQueue(3);
 // Process tracking data
 const result: StateVerdictResult = stateVerdict(
   longQueue.toArray(),
-  shortQueue.toArray()
+  shortQueue.toArray(),
+  10,  // longMaxLength
+  3    // shortMaxLength
 );
 ```
 
@@ -101,8 +104,8 @@ The package works seamlessly in both Electron main and renderer processes:
 const { stateVerdict } = require('bbalgjs');
 
 // Use in IPC handlers
-ipcMain.handle('analyze-tracking', (event, longHistory, shortHistory) => {
-  return stateVerdict(longHistory, shortHistory);
+ipcMain.handle('analyze-tracking', (event, longHistory, shortHistory, longMax, shortMax) => {
+  return stateVerdict(longHistory, shortHistory, longMax, shortMax);
 });
 ```
 
@@ -114,31 +117,37 @@ const { stateVerdict, createFixedQueue } = require('bbalgjs');
 import { stateVerdict, createFixedQueue } from 'bbalgjs';
 
 // Use directly in renderer
-const result = stateVerdict(longHistory, shortHistory);
+const result = stateVerdict(longHistory, shortHistory, 10, 3);
 ```
 
 ## API Reference
 
-### `stateVerdict(longTrackingHistory, shortTrackingHistory)`
+### `stateVerdict(longTrackingHistory, shortTrackingHistory, longMaxLength?, shortMaxLength?)`
 
 Determines the state of an object based on tracking history.
 
 **Parameters:**
 - `longTrackingHistory` (Array<boolean>): N historical tracking results (older to newer)
 - `shortTrackingHistory` (Array<boolean>): M recent tracking results (older to newer)
+- `longMaxLength` (number, optional): Expected maximum length of long tracking history
+- `shortMaxLength` (number, optional): Expected maximum length of short tracking history
+
+**Note:** If you provide one maxLength parameter, you must provide both.
 
 **Returns:** Object with three properties:
 - `stateInProgress` (boolean): Whether the state is currently in progress
-  - True when >50% of long history is true AND ≥90% of short history is true
+  - True when sum of long history ≥ N/2 AND sum of short history ≥ M-1
 - `stateStartJudgment` (boolean): Whether the state has just started
-  - True when exactly 50% of long history is true AND ≥90% of short history is true
+  - True when sum of long history = N/2 AND sum of short history ≥ M-1
 - `stateEndJudgment` (boolean): Whether the state has just ended
-  - True when exactly 50% of long history is true AND ≤10% of short history is true
+  - True when sum of long history = N/2 AND sum of short history ≤ 1
 
 **Throws:** Error if:
 - Inputs are not arrays
-- Arrays are empty
-- Arrays have fewer than 2 elements
+
+**Note:** 
+- Returns all false values if arrays are empty (matches Python bbalg behavior)
+- When `maxLength` parameters are provided, returns all false if history length is less than the specified maximum length
 
 ### `createFixedQueue(maxLength)`
 
@@ -167,20 +176,22 @@ class ObjectTracker {
     this.longHistory = createFixedQueue(20);
     this.shortHistory = createFixedQueue(5);
   }
-  
+
   processFrame(objectDetected) {
     this.longHistory.push(objectDetected);
     this.shortHistory.push(objectDetected);
-    
+
     if (this.longHistory.length < 2 || this.shortHistory.length < 2) {
       return null; // Not enough data yet
     }
-    
+
     const verdict = stateVerdict(
       this.longHistory.toArray(),
-      this.shortHistory.toArray()
+      this.shortHistory.toArray(),
+      20,  // longMaxLength
+      5    // shortMaxLength
     );
-    
+
     if (verdict.stateStartJudgment) {
       console.log('Object tracking started!');
     } else if (verdict.stateEndJudgment) {
@@ -188,7 +199,7 @@ class ObjectTracker {
     } else if (verdict.stateInProgress) {
       console.log('Object is being tracked...');
     }
-    
+
     return verdict;
   }
 }
@@ -201,7 +212,7 @@ for (let i = 0; i < 30; i++) {
   // Object appears after frame 10 and disappears after frame 20
   const detected = i >= 10 && i < 20;
   const result = tracker.processFrame(detected);
-  
+
   if (result) {
     console.log(`Frame ${i}:`, result);
   }
@@ -218,23 +229,25 @@ class MotionDetector {
     this.longHistory = createFixedQueue(sensitivity.long);
     this.shortHistory = createFixedQueue(sensitivity.short);
   }
-  
+
   analyzeMotion(motionValue, threshold = 0.1) {
     // Convert motion value to boolean based on threshold
     const motionDetected = motionValue > threshold;
-    
+
     this.longHistory.push(motionDetected);
     this.shortHistory.push(motionDetected);
-    
+
     if (this.longHistory.length < 2 || this.shortHistory.length < 2) {
       return { motion: 'initializing' };
     }
-    
+
     const verdict = stateVerdict(
       this.longHistory.toArray(),
-      this.shortHistory.toArray()
+      this.shortHistory.toArray(),
+      20,  // longMaxLength
+      5    // shortMaxLength
     );
-    
+
     if (verdict.stateStartJudgment) {
       return { motion: 'started', event: true };
     } else if (verdict.stateEndJudgment) {
@@ -257,7 +270,7 @@ class StateMachine {
   constructor() {
     this.states = new Map();
   }
-  
+
   addState(name, historyConfig = { long: 10, short: 3 }) {
     this.states.set(name, {
       longHistory: createFixedQueue(historyConfig.long),
@@ -265,23 +278,23 @@ class StateMachine {
       active: false
     });
   }
-  
+
   updateState(name, condition) {
     const state = this.states.get(name);
     if (!state) throw new Error(`State ${name} not found`);
-    
+
     state.longHistory.push(condition);
     state.shortHistory.push(condition);
-    
+
     if (state.longHistory.length >= 2 && state.shortHistory.length >= 2) {
       const verdict = stateVerdict(
         state.longHistory.toArray(),
         state.shortHistory.toArray()
       );
-      
+
       const wasActive = state.active;
       state.active = verdict.stateInProgress;
-      
+
       return {
         state: name,
         active: state.active,
@@ -289,7 +302,7 @@ class StateMachine {
         verdict
       };
     }
-    
+
     return null;
   }
 }
@@ -303,11 +316,11 @@ machine.addState('high_cpu', { long: 20, short: 4 });
 setInterval(() => {
   const userActive = machine.updateState('user_active', isUserActive());
   const highCpu = machine.updateState('high_cpu', getCpuUsage() > 80);
-  
+
   if (userActive?.changed) {
     console.log('User activity state changed:', userActive.active);
   }
-  
+
   if (highCpu?.verdict.stateStartJudgment) {
     console.log('High CPU usage detected!');
   }
@@ -332,7 +345,7 @@ This dual-window approach helps filter out noise and provides reliable state det
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/bbalgjs.git
+git clone https://github.com/PINTO0309/bbalgjs.git
 cd bbalgjs
 
 # Install dependencies

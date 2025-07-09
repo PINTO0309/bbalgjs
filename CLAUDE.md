@@ -40,9 +40,9 @@ The source code includes runtime detection for CommonJS, AMD, and browser global
 ## Key Implementation Details
 
 **State Detection Logic:**
-- State in Progress: `longRatio > 0.5 && shortRatio >= 0.9`
-- State Start: `longRatio === 0.5 && shortRatio >= 0.9`
-- State End: `longRatio === 0.5 && shortRatio <= 0.1`
+- State in Progress: `sum(long) >= N/2 && sum(short) >= M-1`
+- State Start: `sum(long) == N/2 && sum(short) >= M-1`
+- State End: `sum(long) == N/2 && sum(short) <= 1`
 
 **Testing Strategy:**
 Tests are organized into categories:

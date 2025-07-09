@@ -34,12 +34,16 @@ export interface FixedQueue<T> {
  * Determines the state of an object based on tracking history
  * @param longTrackingHistory - N historical tracking results (older to newer)
  * @param shortTrackingHistory - M recent tracking results (older to newer)
+ * @param longMaxLength - Expected maximum length of long tracking history
+ * @param shortMaxLength - Expected maximum length of short tracking history
  * @returns Object containing three boolean state judgments
- * @throws {Error} If inputs are invalid or history is insufficient
+ * @throws {Error} If inputs are not arrays
  */
 export function stateVerdict(
   longTrackingHistory: boolean[],
-  shortTrackingHistory: boolean[]
+  shortTrackingHistory: boolean[],
+  longMaxLength?: number,
+  shortMaxLength?: number
 ): StateVerdictResult;
 
 /**

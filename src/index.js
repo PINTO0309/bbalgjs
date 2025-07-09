@@ -7,39 +7,63 @@
  * Determines the state of an object based on tracking history
  * @param {Array<boolean>} longTrackingHistory - N historical tracking results (older to newer)
  * @param {Array<boolean>} shortTrackingHistory - M recent tracking results (older to newer)
+ * @param {number} [longMaxLength] - Expected maximum length of long tracking history
+ * @param {number} [shortMaxLength] - Expected maximum length of short tracking history
  * @returns {{stateInProgress: boolean, stateStartJudgment: boolean, stateEndJudgment: boolean}}
- * @throws {Error} If inputs are invalid or history is insufficient
+ * @throws {Error} If inputs are invalid
  */
-function stateVerdict(longTrackingHistory, shortTrackingHistory) {
+function stateVerdict(longTrackingHistory, shortTrackingHistory, longMaxLength, shortMaxLength) {
   // Validate inputs
   if (!Array.isArray(longTrackingHistory) || !Array.isArray(shortTrackingHistory)) {
     throw new Error('Both tracking histories must be arrays');
+  }
+  
+  // If maxLength parameters are provided, validate them
+  if (longMaxLength !== undefined || shortMaxLength !== undefined) {
+    if (longMaxLength !== undefined && (typeof longMaxLength !== 'number' || longMaxLength <= 0)) {
+      throw new Error('longMaxLength must be a positive number');
+    }
+    if (shortMaxLength !== undefined && (typeof shortMaxLength !== 'number' || shortMaxLength <= 0)) {
+      throw new Error('shortMaxLength must be a positive number');
+    }
+    // Both must be provided together
+    if ((longMaxLength === undefined) !== (shortMaxLength === undefined)) {
+      throw new Error('Both maxLength parameters must be provided together');
+    }
   }
 
   const longLength = longTrackingHistory.length;
   const shortLength = shortTrackingHistory.length;
 
+  // Return false for all judgments if histories are insufficient (matches Python behavior)
   if (longLength === 0 || shortLength === 0) {
-    throw new Error('Tracking histories cannot be empty');
+    return {
+      stateInProgress: false,
+      stateStartJudgment: false,
+      stateEndJudgment: false
+    };
   }
 
-  // Check if we have sufficient history
-  if (longLength < 2 || shortLength < 2) {
-    throw new Error('Insufficient history entries for processing');
+  // Check if histories are complete when maxLength is provided
+  if (longMaxLength !== undefined && shortMaxLength !== undefined) {
+    if (longLength < longMaxLength || shortLength < shortMaxLength) {
+      return {
+        stateInProgress: false,
+        stateStartJudgment: false,
+        stateEndJudgment: false
+      };
+    }
   }
 
   // Count true values in each history
   const longTrueCount = longTrackingHistory.filter(val => val === true).length;
   const shortTrueCount = shortTrackingHistory.filter(val => val === true).length;
 
-  // Calculate ratios
-  const longRatio = longTrueCount / longLength;
-  const shortRatio = shortTrueCount / shortLength;
-
-  // State judgments
-  const stateInProgress = longRatio > 0.5 && shortRatio >= 0.9;
-  const stateStartJudgment = longRatio === 0.5 && shortRatio >= 0.9;
-  const stateEndJudgment = longRatio === 0.5 && shortRatio <= 0.1;
+  // State judgments based on Python implementation
+  // N = longLength, M = shortLength
+  const stateInProgress = longTrueCount >= Math.floor(longLength / 2) && shortTrueCount >= (shortLength - 1);
+  const stateStartJudgment = longTrueCount === Math.floor(longLength / 2) && shortTrueCount >= (shortLength - 1);
+  const stateEndJudgment = longTrueCount === Math.floor(longLength / 2) && shortTrueCount <= 1;
 
   return {
     stateInProgress,
